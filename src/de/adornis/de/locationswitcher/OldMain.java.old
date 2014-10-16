@@ -1,0 +1,249 @@
+package de.adornis.de.locationswitcher;
+
+import android.app.Activity;
+import android.content.Context;
+import android.content.Intent;
+import android.location.Location;
+import android.location.LocationListener;
+import android.location.LocationManager;
+import android.net.Uri;
+import android.os.Bundle;
+import android.telephony.CellLocation;
+import android.telephony.TelephonyManager;
+import android.telephony.gsm.GsmCellLocation;
+import android.util.Log;
+import android.view.View;
+import android.view.View.OnClickListener;
+import android.widget.Button;
+import android.widget.TextView;
+
+import java.io.*;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.net.URLConnection;
+
+public class OldMain extends Activity {
+
+	GsmCellLocation location;
+	int cellID, lac;
+	String TAG = "OldMain";
+
+
+	/**
+	 * Called when the activity is first created.
+	 */
+	@Override
+	public void onCreate(Bundle savedInstanceState) {
+		super.onCreate(savedInstanceState);
+		setContentView(R.layout.main);
+
+
+		String TAG = "OldMain - onCreate";
+
+		//start google guide code
+
+		// Acquire a reference to the system Location Manager
+		LocationManager locationManager = (LocationManager) this.getSystemService(Context.LOCATION_SERVICE);
+
+
+		String locationProvider = LocationManager.GPS_PROVIDER;
+		// Or use LocationManager.GPS_PROVIDER
+		Location lastKnownLocation = locationManager.getLastKnownLocation(locationProvider);
+		Log.e(TAG, "----------------- last known location-----------------");
+		Log.e(TAG + "lat :", String.valueOf(lastKnownLocation.getLatitude())); //TODO why NPE?
+		Log.e(TAG + "long :", String.valueOf(lastKnownLocation.getLongitude()));
+		Log.e(TAG, "----------------------------------");
+
+
+
+
+		// Define a listener that responds to location updates
+		LocationListener locationListener = new LocationListener() {
+			public void onLocationChanged(Location location) {
+				// Called when a new location is found by the network location provider.
+				String TAG = "OldMain - onCreate - onLocationChanged";
+				Log.e(TAG, "----------------------------------");
+				Log.e(TAG + " provider :", String.valueOf(location.getProvider()));
+				Log.e(TAG + " lat :", String.valueOf(location.getLatitude()));
+				Log.e(TAG + " long :", String.valueOf(location.getLongitude()));
+				Log.e(TAG + " accuracy :", String.valueOf(location.getAccuracy()));
+				Log.e(TAG + " satellites :", String.valueOf(location.getExtras().get("satellites")));
+				Log.e(TAG + " speed :", String.valueOf(location.getSpeed()));
+				Log.e(TAG + " altitude :", String.valueOf(location.getAltitude()));
+				Log.e(TAG + " bearing :", String.valueOf(location.getBearing()));
+				Log.e(TAG, "----------------------------------");
+
+				String locationProvider = LocationManager.NETWORK_PROVIDER;
+				// Or use LocationManager.GPS_PROVIDER
+				Location lastKnownLocation = locationManager.getLastKnownLocation(locationProvider);
+				Log.e(TAG, "----------------- last known location-----------------");
+				Log.e(TAG + "lat :", String.valueOf(lastKnownLocation.getLatitude())); //TODO why NPE?
+				Log.e(TAG + "long :", String.valueOf(lastKnownLocation.getLongitude()));
+				Log.e(TAG, "----------------------------------");
+
+
+
+			}
+
+			public void onStatusChanged(String provider, int status, Bundle extras) {
+				String TAG = "OldMain - onCreate - onStatusChanged";
+				Log.e(TAG, "----------------------------------");
+				Log.e(TAG, "Provider: " + provider);
+				Log.e(TAG, "status: : " + status);
+				Log.e(TAG, "satellites: : " + extras.get("satellites"));
+				Log.e(TAG, "----------------------------------");
+			}
+
+			public void onProviderEnabled(String provider) {
+				Log.e(TAG, "----------------------------------");
+				Log.e(TAG + " onProviderEnabled", provider);
+				Log.e(TAG, "----------------------------------");
+			}
+
+			public void onProviderDisabled(String provider) {
+				Log.e(TAG, "----------------------------------");
+				Log.e(TAG + " onProviderEnabled", provider);
+				Log.e(TAG, "----------------------------------");
+			}
+		};
+
+//		try {
+//			Thread.sleep(20000);
+//		} catch (InterruptedException e) {
+//			e.printStackTrace();
+//		}
+
+		// Register the listener with the Location Manager to receive location updates
+//		locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 0, 0, locationListener);
+//		locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, locationListener);
+
+//		try {
+//			Thread.sleep(20000);
+//		} catch (InterruptedException e) {
+//			e.printStackTrace();
+//		}
+
+
+
+
+
+		//end google guide code
+
+
+		TelephonyManager tm = (TelephonyManager)
+				getSystemService(Context.TELEPHONY_SERVICE);
+		location = (GsmCellLocation) tm.getCellLocation();
+
+		Button btnDisplayMap = (Button) findViewById(R.id.displayMap);
+		btnDisplayMap.setOnClickListener(new OnClickListener() {
+			public void onClick(View arg0) {
+
+				new Thread(new Runnable() {
+					@Override
+					public void run() {
+						String TAG = "OldMain - onCreate - onClickListener";
+
+						//---obtain the CellID and LAC of the device---
+						CellLocation.requestLocationUpdate();
+						cellID = location.getCid();
+						lac = location.getLac();
+						Log.e(TAG + " Cell ID: ", String.valueOf(cellID));
+						Log.e(TAG + " lac: ", String.valueOf(lac));
+
+						//---for testing only---
+//						cellID = 5496;
+//						lac = 6037;
+						//----------------------
+
+						try {
+							if (!displayMap(cellID, lac)) {
+								TextView t = (TextView) findViewById(R.id.status);
+								t.setText("Location not found!");
+							}
+
+						} catch (Exception e) {
+							e.printStackTrace();
+						}
+
+					}
+				}).start();
+			}
+		});
+
+
+	}
+
+	private boolean displayMap(int cellID, int lac) throws Exception {
+		String TAG = "OldMain displayMap";
+
+		String urlString = "http://www.google.com/glm/mmap";
+
+		//---open a connection to Google Maps API---
+		URL url = new URL(urlString);
+		URLConnection conn = url.openConnection();
+		HttpURLConnection httpConn = (HttpURLConnection) conn;
+		httpConn.setRequestMethod("POST");
+		httpConn.setDoOutput(true);
+		httpConn.setDoInput(true);
+		httpConn.connect();
+
+		//---write some custom data to Google Maps API---
+		OutputStream outputStream = httpConn.getOutputStream();
+		WriteData(outputStream, cellID, lac);
+
+		//---get the response---
+		InputStream inputStream = httpConn.getInputStream();
+		DataInputStream dataInputStream = new DataInputStream(inputStream);
+
+		//---interpret the response obtained---
+		dataInputStream.readShort();
+		dataInputStream.readByte();
+		int code = dataInputStream.readInt();
+		if (code == 0) {
+			double lat = (double) dataInputStream.readInt() / 1000000D;
+			double lng = (double) dataInputStream.readInt() / 1000000D;
+			Log.e(TAG + " lat: ", String.valueOf(lat));
+			Log.e(TAG + " lng: ", String.valueOf(lng));
+			dataInputStream.readInt();
+			dataInputStream.readInt();
+			dataInputStream.readUTF();
+
+			//---display Google Maps---
+			String uriString = "geo:" + lat
+					+ "," + lng;
+			Intent intent = new Intent(android.content.Intent.ACTION_VIEW,
+					Uri.parse(uriString));
+			startActivity(intent);
+			return true;
+		} else {
+			return false;
+		}
+	}
+
+
+	private void WriteData(OutputStream out, int cellID, int lac)
+			throws IOException {
+		DataOutputStream dataOutputStream = new DataOutputStream(out);
+		dataOutputStream.writeShort(21);
+		dataOutputStream.writeLong(0);
+		dataOutputStream.writeUTF("en");
+		dataOutputStream.writeUTF("Android");
+		dataOutputStream.writeUTF("1.0");
+		dataOutputStream.writeUTF("Web");
+		dataOutputStream.writeByte(27);
+		dataOutputStream.writeInt(0);
+		dataOutputStream.writeInt(0);
+		dataOutputStream.writeInt(3);
+		dataOutputStream.writeUTF("");
+
+		dataOutputStream.writeInt(cellID);
+		dataOutputStream.writeInt(lac);
+
+		dataOutputStream.writeInt(0);
+		dataOutputStream.writeInt(0);
+		dataOutputStream.writeInt(0);
+		dataOutputStream.writeInt(0);
+		dataOutputStream.flush();
+	}
+
+}
